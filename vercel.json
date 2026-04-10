@@ -1,0 +1,10 @@
+{
+  "buildCommand": "vite build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "rewrites": [
+    { "source": "/api/send-otp", "destination": "/api/send-otp.js" },
+    { "source": "/api/verify-otp", "destination": "/api/verify-otp.js" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
