@@ -6,9 +6,9 @@
 
 create extension if not exists pgcrypto;
 
--- ============================================================
+-- ==============================================================
 --  1) HELPER FUNCTIONS (must come first — referenced by triggers below)
--- ============================================================
+-- ==============================================================
 
 create or replace function public.app_role()
 returns text
