@@ -7,17 +7,14 @@ import { supabase, setLocalSession, getLocalSession, clearLocalSession } from '.
  *  into public.profiles from the client — the trigger handles it.
  * ─────────────────────────────────────────────────────────────────────────── */
 export const createUser = async (data) => {
-  // ── 1. Duplicate check against public.profiles (not public.users) ──────────
-  const { data: existing, error: dupErr } = await supabase
-    .from('profiles')                                       // FIX: was 'users'
-    .select('id')
-    .or(`username.eq.${data.username.toLowerCase()},email.eq.${data.email.toLowerCase()}`);
+  // NOTE: No pre-signup duplicate check here — querying profiles before auth
+  // runs as anon role which has no SELECT permission and causes "permission denied".
+  // Duplicate emails are rejected by Supabase Auth automatically.
+  // Duplicate usernames are caught by the DB unique constraint on profiles.username
+  // and surfaced as a clear error message below.
 
-  if (dupErr) throw new Error(dupErr.message);
-  if (existing?.length) throw new Error('Username or email already exists.');
-
-  // ── 2. Auth signup — trigger will INSERT into public.profiles automatically ─
-  //       Pass extra fields as raw_user_meta_data so handle_new_user() picks them up.
+  // Auth signup — trigger will INSERT into public.profiles automatically.
+  // Extra fields are passed as raw_user_meta_data so handle_new_user() picks them up.
   const { data: result, error } = await supabase.auth.signUp({
     email:    data.email.toLowerCase(),
     password: data.pass,                                    // FIX: was stored as plain pass_hash column
@@ -33,7 +30,12 @@ export const createUser = async (data) => {
     },
   });
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    // Surface duplicate username/email as a friendly message
+    if (error.message.includes('unique') || error.message.includes('duplicate') || error.message.includes('already registered'))
+      throw new Error('Username or email already exists.');
+    throw new Error(error.message);
+  }
 
   // Sign out immediately so the user goes through the full login + OTP flow
   await supabase.auth.signOut();
