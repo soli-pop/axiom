@@ -7,37 +7,41 @@ import { supabase, setLocalSession, getLocalSession, clearLocalSession } from '.
  *  into public.profiles from the client — the trigger handles it.
  * ─────────────────────────────────────────────────────────────────────────── */
 export const createUser = async (data) => {
-  // NOTE: No pre-signup duplicate check here — querying profiles before auth
-  // runs as anon role which has no SELECT permission and causes "permission denied".
-  // Duplicate emails are rejected by Supabase Auth automatically.
-  // Duplicate usernames are caught by the DB unique constraint on profiles.username
-  // and surfaced as a clear error message below.
-
-  // Auth signup — trigger will INSERT into public.profiles automatically.
-  // Extra fields are passed as raw_user_meta_data so handle_new_user() picks them up.
+  // Step 1: Create the auth user. The handle_new_user trigger attempts to
+  // auto-create the profile row. If the trigger fails silently, step 2 catches it.
   const { data: result, error } = await supabase.auth.signUp({
     email:    data.email.toLowerCase(),
-    password: data.pass,                                    // FIX: was stored as plain pass_hash column
+    password: data.pass,
     options: {
       data: {
-        username:     data.username.toLowerCase(),          // FIX: column is 'username' in profiles
-        display_name: data.name,                            // FIX: was 'name' — column is 'display_name'
-        full_name:    data.name,                            // FIX: was missing — column is 'full_name'
-        department:   data.dept,                            // FIX: was 'dept' — column is 'department'
-        avatar_url:   data.avatar || null,                  // FIX: was 'avatar' — column is 'avatar_url'
-        // student_no is intentionally omitted at signup; admin assigns it later
+        username:     data.username.toLowerCase(),
+        display_name: data.name,
+        full_name:    data.name,
+        department:   data.dept,
+        avatar_url:   data.avatar || null,
       },
     },
   });
 
   if (error) {
-    // Surface duplicate username/email as a friendly message
     if (error.message.includes('unique') || error.message.includes('duplicate') || error.message.includes('already registered'))
       throw new Error('Username or email already exists.');
     throw new Error(error.message);
   }
 
-  // Sign out immediately so the user goes through the full login + OTP flow
+  // Step 2: Safety net — if signUp returned a session (email confirmation OFF),
+  // call the RPC to ensure the profile row exists even if the trigger skipped it.
+  if (result?.session) {
+    await supabase.rpc('register_profile_from_signup', {
+      p_email:        data.email.toLowerCase(),
+      p_username:     data.username.toLowerCase(),
+      p_full_name:    data.name,
+      p_display_name: data.name,
+      p_department:   data.dept || 'Computer Science',
+    });
+  }
+
+  // Sign out immediately — user must go through the login + OTP flow
   await supabase.auth.signOut();
 
   return result.user;
