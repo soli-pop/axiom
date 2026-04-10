@@ -1,0 +1,33 @@
+name: Deploy Schema to Supabase
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'supabase_schema_fixed.sql'   # only runs when this file changes
+  workflow_dispatch:                   # also allows manual trigger from GitHub UI
+
+jobs:
+  deploy:
+    name: Apply SQL Schema
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Run schema against Supabase
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          echo "▶ Dropping and recreating public schema..."
+          psql "$SUPABASE_DB_URL" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT USAGE ON SCHEMA public TO anon, authenticated;"
+
+          echo "▶ Applying supabase_schema_fixed.sql..."
+          psql "$SUPABASE_DB_URL" -f supabase_schema_fixed.sql
+
+          echo "✅ Schema deployed successfully."
