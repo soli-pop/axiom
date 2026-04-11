@@ -1861,9 +1861,16 @@ export default function App() {
   const handleLogout = () => showModal({
     title:"Sign Out", msg:"End your session? All unsaved changes will be lost.",
     danger:true, confirmLabel:"Sign Out",
-    onConfirm:()=>{ closeModal(); setUser(null); setOtpToken(""); setTheme("dark"); setScreen("hero"); }
+    onConfirm: async () => {
+      closeModal();
+      await supabase.auth.signOut();
+      clearLocalSession();
+      setUser(null);
+      setOtpToken("");
+      setTheme("dark");
+      setScreen("hero");
+    }
   });
-
   return (
     <div data-theme={theme}>
       <style>{STYLES}</style>
