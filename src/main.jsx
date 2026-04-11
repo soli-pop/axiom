@@ -1,9 +1,9 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import SupabaseTest from './SupabaseTest'
+import App from './App'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <SupabaseTest />
+    <App />
   </StrictMode>
 )
