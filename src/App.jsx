@@ -1,3 +1,4 @@
+import { supabase, getLocalSession, setLocalSession, clearLocalSession } from './supabase';
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   LayoutDashboard, Users, BookOpen, ClipboardList, Bell,
