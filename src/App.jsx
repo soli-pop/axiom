@@ -1651,9 +1651,159 @@ const SettingsView = ({user, setUser, theme, setTheme, toast}) => {
 };
 
 /* ────────────────── ROLE-BASED NAV CONFIG ────────────────── */
+
+/* ────────────────── PENDING ACCOUNTS VIEW ────────────────── */
+const PendingAccountsView = ({ toast, role }) => {
+  const [accounts, setAccounts] = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [form, setForm]         = useState(null); // {profileId, name, email}
+  const [sn, setSn]             = useState("");
+  const [program, setProgram]   = useState("BS Computer Science");
+  const [saving, setSaving]     = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("role", "student")
+        .eq("confirmed", false)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      setAccounts(data || []);
+    } catch(e) {
+      toast("Failed to load pending accounts: " + e.message, "error");
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleAssign = async () => {
+    if (!sn.trim()) { toast("Please enter a Student Number.", "error"); return; }
+    setSaving(true);
+    try {
+      // Update profile with SN
+      const { error: profErr } = await supabase
+        .from("profiles")
+        .update({ student_no: sn.trim().toUpperCase() })
+        .eq("id", form.profileId);
+      if (profErr) throw profErr;
+
+      // Create student record
+      const { error: stuErr } = await supabase
+        .from("students")
+        .insert({
+          id: sn.trim().toUpperCase(),
+          name: form.name,
+          program: program,
+          year_level: 1,
+          gpa: 0.00,
+          status: "Enrolled"
+        });
+      if (stuErr && !stuErr.message.includes("duplicate") && !stuErr.message.includes("unique")) throw stuErr;
+
+      toast("Student Number assigned! Student can now confirm their account.", "success");
+      setForm(null);
+      setSn("");
+      load();
+    } catch(e) {
+      toast("Error: " + e.message, "error");
+    }
+    setSaving(false);
+  };
+
+  const programs = [
+    "BS Computer Science", "BS Information Technology", "BS Mathematics",
+    "BS Physics", "BS Civil Engineering", "BS Nursing", "BS Accountancy",
+  ];
+
+  return (
+    <div className="fu">
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+        <div>
+          <div style={{fontSize:17,fontWeight:700}}>Pending Accounts</div>
+          <div style={{fontSize:12,color:"var(--muted)",marginTop:3}}>New student signups awaiting Student Number assignment</div>
+        </div>
+        <button className="btn btn-ghost btn-sm" onClick={load}><RefreshCw size={13}/>Refresh</button>
+      </div>
+
+      {loading ? (
+        <div style={{display:"flex",gap:12,flexDirection:"column"}}>
+          {[1,2,3].map(i=><div key={i} className="skel" style={{height:64,borderRadius:10}}/>)}
+        </div>
+      ) : accounts.length === 0 ? (
+        <div className="neo" style={{padding:40,textAlign:"center",color:"var(--muted)"}}>
+          <UserCheck size={32} style={{margin:"0 auto 12px",opacity:.4}}/>
+          <div style={{fontSize:14}}>No pending accounts</div>
+          <div style={{fontSize:12,marginTop:6}}>All students have been processed.</div>
+        </div>
+      ) : (
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {accounts.map(a => (
+            <div key={a.id} className="neo-sm" style={{padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+              <div style={{display:"flex",alignItems:"center",gap:12}}>
+                <div style={{width:38,height:38,borderRadius:10,background:"var(--acc)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:14,color:"var(--mint)",flexShrink:0}}>
+                  {(a.display_name||a.username).slice(0,2).toUpperCase()}
+                </div>
+                <div>
+                  <div style={{fontWeight:600,fontSize:13.5}}>{a.display_name || a.username}</div>
+                  <div style={{fontSize:11.5,color:"var(--muted)"}}>{a.email} · Signed up {new Date(a.created_at).toLocaleDateString()}</div>
+                </div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <span className="badge" style={{background:"rgba(212,160,23,0.15)",color:"var(--warn)"}}>Pending</span>
+                {role === "admin" && (
+                  <button className="btn btn-pri btn-sm" onClick={()=>{ setForm({profileId:a.id, name:a.display_name||a.full_name||a.username, email:a.email}); setSn(""); }}>
+                    <UserPlus size={13}/>Assign SN
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Assign SN Modal */}
+      {form && (
+        <div className="modal-wrap" onClick={e=>e.target===e.currentTarget&&setForm(null)}>
+          <div className="neo modal-card" style={{width:"100%",maxWidth:420,padding:28}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+              <div style={{fontSize:16,fontWeight:700}}>Assign Student Number</div>
+              <button className="btn btn-ghost btn-icon" onClick={()=>setForm(null)}><X size={15}/></button>
+            </div>
+            <div style={{fontSize:12.5,color:"var(--muted)",marginBottom:18,padding:"10px 14px",background:"var(--surf2)",borderRadius:8}}>
+              <strong style={{color:"var(--text)"}}>{form.name}</strong><br/>{form.email}
+            </div>
+            <div style={{marginBottom:14}}>
+              <label style={{fontSize:11.5,color:"var(--muted)",fontWeight:500,letterSpacing:".05em",textTransform:"uppercase"}}>Student Number</label>
+              <input className="neo-input" style={{marginTop:6,textTransform:"uppercase"}} placeholder="e.g. SN-2026-0042"
+                value={sn} onChange={e=>setSn(e.target.value)}/>
+            </div>
+            <div style={{marginBottom:20}}>
+              <label style={{fontSize:11.5,color:"var(--muted)",fontWeight:500,letterSpacing:".05em",textTransform:"uppercase"}}>Program</label>
+              <select className="neo-input" style={{marginTop:6}} value={program} onChange={e=>setProgram(e.target.value)}>
+                {programs.map(p=><option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div style={{display:"flex",gap:10}}>
+              <button className="btn btn-ghost" style={{flex:1}} onClick={()=>setForm(null)}>Cancel</button>
+              <button className="btn btn-pri" style={{flex:2}} onClick={handleAssign} disabled={saving}>
+                {saving ? <RefreshCw size={13} style={{animation:"spin 1s linear infinite"}}/> : <><Check size={13}/>Assign & Save</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const NAV_CONFIG = {
   admin: [
     {id:"overview",  label:"Overview",         icon:<LayoutDashboard size={16}/>},
+    {id:"pending",   label:"Pending Accounts", icon:<UserCheck size={16}/>},
     {id:"students",  label:"Students",          icon:<Users size={16}/>},
     {id:"grades",    label:"Grade Encoding",    icon:<BookOpen size={16}/>},
     {id:"enroll",    label:"Enrollment",        icon:<ClipboardList size={16}/>},
@@ -1665,6 +1815,7 @@ const NAV_CONFIG = {
   ],
   teacher: [
     {id:"overview",  label:"Overview",          icon:<LayoutDashboard size={16}/>},
+    {id:"pending",   label:"Pending Accounts",  icon:<UserCheck size={16}/>},
     {id:"students",  label:"My Students",       icon:<Users size={16}/>},
     {id:"grades",    label:"Grade Encoding",    icon:<BookOpen size={16}/>},
     {id:"exams",     label:"Exam Schedules",    icon:<FileText size={16}/>},
@@ -1699,6 +1850,7 @@ const Dashboard = ({user, setUser, theme, setTheme, onLogout, showModal, toast})
       if(user.role==="teacher") return <TeacherOverview user={user}/>;
       return <StudentOverview user={user}/>;
     }
+    if(active==="pending")  return <PendingAccountsView toast={toast} role={user.role}/>;
     if(active==="students") return <StudentsView {...p} readOnly={user.role==="teacher"}/>;
     if(active==="grades")   return <GradesView {...p}/>;
     if(active==="enroll")   return <EnrollmentView toast={toast} role={user.role} user={user}/>;
@@ -1803,6 +1955,70 @@ const Dashboard = ({user, setUser, theme, setTheme, onLogout, showModal, toast})
   );
 };
 
+
+/* ────────────────── CONFIRM SN SCREEN ────────────────── */
+const ConfirmSN = ({ user, onConfirmed }) => {
+  const [sn, setSn] = useState("");
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleConfirm = async () => {
+    if (!sn.trim()) { setErr("Please enter your Student Number."); return; }
+    setLoading(true);
+    setErr("");
+    try {
+      const { data: profile, error } = await supabase
+        .from("profiles")
+        .select("student_no")
+        .eq("id", user.id)
+        .single();
+      if (error || !profile) throw new Error("Profile not found.");
+      if (profile.student_no.toUpperCase() !== sn.trim().toUpperCase())
+        throw new Error("Incorrect Student Number. Please check with your admin.");
+      // Mark as confirmed
+      await supabase.from("profiles").update({ confirmed: true }).eq("id", user.id);
+      const updated = { ...user, idno: profile.student_no, confirmed: true };
+      setLocalSession(updated);
+      onConfirmed(updated);
+    } catch(e) {
+      setErr(e.message);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{minHeight:"100dvh",display:"flex",alignItems:"center",justifyContent:"center",background:"var(--base)",padding:20}}>
+      <div className="neo si" style={{width:"100%",maxWidth:420,padding:36}}>
+        <div style={{textAlign:"center",marginBottom:28}}>
+          <div style={{width:52,height:52,borderRadius:14,background:"var(--acc)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}>
+            <Shield size={24} color="var(--mint)"/>
+          </div>
+          <div style={{fontFamily:"var(--ff-brand)",fontSize:22,fontWeight:700,color:"var(--text)"}}>Confirm Your Account</div>
+          <div style={{fontSize:12.5,color:"var(--muted)",marginTop:6}}>Enter the Student Number provided by your administrator to activate your account.</div>
+        </div>
+        <div style={{marginBottom:16}}>
+          <label style={{fontSize:11.5,color:"var(--muted)",fontWeight:500,letterSpacing:".05em",textTransform:"uppercase"}}>Student Number</label>
+          <input
+            className="neo-input"
+            style={{marginTop:6,textTransform:"uppercase",letterSpacing:".08em"}}
+            placeholder="e.g. SN-2026-0042"
+            value={sn}
+            onChange={e=>setSn(e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&handleConfirm()}
+          />
+        </div>
+        {err && <div style={{background:"rgba(192,57,43,0.12)",border:"1px solid rgba(192,57,43,0.3)",borderRadius:8,padding:"9px 13px",fontSize:12.5,color:"var(--danger)",marginBottom:14,display:"flex",alignItems:"center",gap:8}}><AlertTriangle size={14}/>{err}</div>}
+        <button className="btn btn-pri" style={{width:"100%",justifyContent:"center",padding:"11px 0"}} onClick={handleConfirm} disabled={loading}>
+          {loading ? <RefreshCw size={14} style={{animation:"spin 1s linear infinite"}}/> : <><Check size={14}/>Confirm & Enter</>}
+        </button>
+        <div style={{textAlign:"center",marginTop:14,fontSize:12,color:"var(--muted)"}}>
+          Need help? Contact your school administrator.
+        </div>
+      </div>
+    </div>
+  );
+};
+
 /* ────────────────── APP ROOT ────────────────── */
 export default function App() {
   const [screen,setScreen]     = useState("hero");
@@ -1820,27 +2036,33 @@ export default function App() {
         const saved = getLocalSession();
         if (saved) {
           setUser(saved);
-          setScreen("dashboard");
+          if (saved.role === 'student' && !saved.confirmed) {
+            setScreen("confirm_sn");
+          } else {
+            setScreen("dashboard");
+          }
         } else {
           const { data: profile } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", session.user.id)
-            .single();
+            .from("profiles").select("*").eq("id", session.user.id).single();
           if (profile) {
             const u = {
-              id:       profile.id,
-              username: profile.username,
-              email:    profile.email,
-              name:     profile.display_name || profile.full_name,
-              role:     profile.role,
-              dept:     profile.department,
-              avatar:   profile.avatar_url || (profile.display_name || profile.username).slice(0,2).toUpperCase(),
-              idno:     profile.student_no || "",
+              id:        profile.id,
+              username:  profile.username,
+              email:     profile.email,
+              name:      profile.display_name || profile.full_name,
+              role:      profile.role,
+              dept:      profile.department,
+              avatar:    profile.avatar_url || (profile.display_name || profile.username).slice(0,2).toUpperCase(),
+              idno:      profile.student_no || "",
+              confirmed: profile.confirmed || false,
             };
             setLocalSession(u);
             setUser(u);
-            setScreen("dashboard");
+            if (u.role === 'student' && !u.confirmed) {
+              setScreen("confirm_sn");
+            } else {
+              setScreen("dashboard");
+            }
           }
         }
       }
@@ -1857,7 +2079,13 @@ export default function App() {
   const closeModal = ()  => setModal(null);
 
   const handleLogin = (u,token) => { setUser(u); setOtpToken(token); setScreen("2fa"); };
-  const handleVerify = () => setScreen("dashboard");
+  const handleVerify = () => {
+    if (user?.role === 'student' && !user?.confirmed) {
+      setScreen("confirm_sn");
+    } else {
+      setScreen("dashboard");
+    }
+  };
   const handleLogout = () => showModal({
     title:"Sign Out", msg:"End your session? All unsaved changes will be lost.",
     danger:true, confirmLabel:"Sign Out",
@@ -1878,10 +2106,10 @@ export default function App() {
       {screen==="hero"      && <Hero onStart={()=>setScreen("login")}/>}
       {screen==="login"     && <Login onLogin={handleLogin} onBack={()=>setScreen("hero")}/>}
       {screen==="2fa"       && <TwoFA user={user} otpToken={otpToken} onVerify={handleVerify} onBack={()=>setScreen("login")}/>}
+      {screen==="confirm_sn" && <ConfirmSN user={user} onConfirmed={(u)=>{ setUser(u); setScreen("dashboard"); }}/>}
       {screen==="dashboard" && <Dashboard user={user} setUser={setUser} theme={theme} setTheme={setTheme} onLogout={handleLogout} showModal={showModal} toast={toast}/>}
       {modal && <ConfirmModal {...modal} onCancel={closeModal}/>}
       <ToastLayer toasts={toasts}/>
     </div>
   );
 }
-
