@@ -343,3 +343,31 @@ export const getEvents = async () => {
     desc:  r.description,
   }));
 };
+
+/* ─── PENDING ACCOUNTS ────────────────────────────────────────────────────── */
+export const getPendingAccounts = async () => {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('role', 'student')
+    .eq('confirmed', false)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data;
+};
+
+export const assignStudentNumber = async (profileId, studentNo, fullName, program) => {
+  // Update profile with SN
+  const { error: profErr } = await supabase
+    .from('profiles')
+    .update({ student_no: studentNo })
+    .eq('id', profileId);
+  if (profErr) throw profErr;
+
+  // Create student record if not exists
+  const { error: stuErr } = await supabase
+    .from('students')
+    .insert({ id: studentNo, name: fullName, program: program || 'BS Computer Science', year_level: 1, gpa: 0.00, status: 'Enrolled' })
+    .select().single();
+  if (stuErr && !stuErr.message.includes('duplicate')) throw stuErr;
+};
