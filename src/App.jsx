@@ -1957,13 +1957,17 @@ const Dashboard = ({user, setUser, theme, setTheme, onLogout, showModal, toast})
 
 
 /* ────────────────── CONFIRM SN SCREEN ────────────────── */
-const ConfirmSN = ({ user, onConfirmed }) => {
+const ConfirmSN = ({ user: userProp, onConfirmed }) => {
   const [sn, setSn] = useState("");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Always read fresh from localStorage to avoid undefined prop race condition
+  const user = getLocalSession() || userProp;
+
   const handleConfirm = async () => {
     if (!sn.trim()) { setErr("Please enter your Student Number."); return; }
+    if (!user?.id) { setErr("Session error. Please sign out and log in again."); return; }
     setLoading(true);
     setErr("");
     try {
@@ -1973,6 +1977,7 @@ const ConfirmSN = ({ user, onConfirmed }) => {
         .eq("id", user.id)
         .single();
       if (error || !profile) throw new Error("Profile not found.");
+      if (!profile.student_no) throw new Error("No Student Number assigned yet. Please contact your admin.");
       if (profile.student_no.toUpperCase() !== sn.trim().toUpperCase())
         throw new Error("Incorrect Student Number. Please check with your admin.");
       // Mark as confirmed
