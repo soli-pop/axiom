@@ -1995,6 +1995,16 @@ const ConfirmSN = ({ user, onConfirmed }) => {
           </div>
           <div style={{fontFamily:"var(--ff-brand)",fontSize:22,fontWeight:700,color:"var(--text)"}}>Confirm Your Account</div>
           <div style={{fontSize:12.5,color:"var(--muted)",marginTop:6}}>Enter the Student Number provided by your administrator to activate your account.</div>
+          {/* Show who is logged in */}
+          <div style={{marginTop:14,padding:"10px 14px",background:"var(--surf2)",borderRadius:9,display:"flex",alignItems:"center",gap:10,justifyContent:"center"}}>
+            <div style={{width:30,height:30,borderRadius:8,background:"var(--acc)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:12,color:"var(--mint)",flexShrink:0}}>
+              {(user?.name||user?.username||user?.email||"?").slice(0,2).toUpperCase()}
+            </div>
+            <div style={{textAlign:"left"}}>
+              <div style={{fontSize:12.5,fontWeight:600,color:"var(--text)"}}>{user?.name||user?.username||"Unknown"}</div>
+              <div style={{fontSize:11,color:"var(--muted)"}}>{user?.email}</div>
+            </div>
+          </div>
         </div>
         <div style={{marginBottom:16}}>
           <label style={{fontSize:11.5,color:"var(--muted)",fontWeight:500,letterSpacing:".05em",textTransform:"uppercase"}}>Student Number</label>
@@ -2013,6 +2023,12 @@ const ConfirmSN = ({ user, onConfirmed }) => {
         </button>
         <div style={{textAlign:"center",marginTop:14,fontSize:12,color:"var(--muted)"}}>
           Need help? Contact your school administrator.
+        </div>
+        <div style={{textAlign:"center",marginTop:10}}>
+          <button style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:"var(--muted)",textDecoration:"underline",fontFamily:"var(--ff)"}}
+            onClick={async()=>{ await supabase.auth.signOut(); clearLocalSession(); window.location.reload(); }}>
+            Sign out and use a different account
+          </button>
         </div>
       </div>
     </div>
