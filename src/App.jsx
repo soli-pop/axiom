@@ -1294,6 +1294,251 @@ const GradesView = ({showModal,toast,user}) => {
   );
 };
 
+
+/* ────────────────── SUBJECTS MANAGEMENT VIEW ────────────────── */
+const SubjectsAdminView = ({toast, showModal}) => {
+  const emptyForm = () => ({
+    code: "",
+    title: "",
+    units: 3,
+    yr: 1,
+    dept: DEPARTMENTS[0] || "",
+    schedule: "",
+    room: "",
+    instructor_name: "",
+    desc: "",
+    pre: "",
+  });
+
+  const [subjects, setSubjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
+  const [editingCode, setEditingCode] = useState("");
+  const [form, setForm] = useState(emptyForm());
+
+  const loadSubjects = useCallback(async () => {
+    setLoading(true);
+    try {
+      const list = await getSubjects();
+      setSubjects(list);
+    } catch (e) {
+      setSubjects([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSubjects();
+  }, [loadSubjects]);
+
+  const resetForm = () => {
+    setForm(emptyForm());
+    setEditingCode("");
+  };
+
+  const startEdit = (subject) => {
+    setEditingCode(subject.code);
+    setForm({
+      code: subject.code || "",
+      title: subject.title || "",
+      units: subject.units ?? 3,
+      yr: subject.yr ?? 1,
+      dept: subject.dept || (DEPARTMENTS[0] || ""),
+      schedule: subject.schedule || "",
+      room: subject.room || "",
+      instructor_name: subject.instructor || "",
+      desc: subject.desc || "",
+      pre: subject.pre && subject.pre !== "None" ? subject.pre : "",
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const saveSubject = async () => {
+    const code = form.code.trim().toUpperCase();
+    const title = form.title.trim();
+    if (!code || !title) {
+      toast("Subject code and title are required.", "warn");
+      return;
+    }
+
+    const payload = {
+      code,
+      title,
+      units: Number(form.units) || 0,
+      year_level: Number(form.yr) || 1,
+      dept: form.dept.trim(),
+      instructor_id: null,
+      instructor_name: form.instructor_name.trim() || null,
+      schedule: form.schedule.trim() || null,
+      room: form.room.trim() || null,
+      description: form.desc.trim() || null,
+      prereq_code: form.pre.trim() && form.pre.trim().toUpperCase() !== "NONE" ? form.pre.trim().toUpperCase() : null,
+    };
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('subjects')
+        .upsert(payload, { onConflict: 'code' });
+      if (error) throw error;
+      toast(editingCode ? `${code} updated.` : `${code} created.`);
+      resetForm();
+      await loadSubjects();
+    } catch (e) {
+      toast(e.message || "Failed to save subject.", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteSubject = (subject) => {
+    showModal({
+      title: "Delete Subject",
+      msg: `Delete ${subject.code} — ${subject.title}? This will remove it from the subject catalog.`,
+      confirmLabel: "Delete",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          const { error } = await supabase.from('subjects').delete().eq('code', subject.code);
+          if (error) throw error;
+          toast(`${subject.code} deleted.`, "warn");
+          if (editingCode === subject.code) resetForm();
+          await loadSubjects();
+        } catch (e) {
+          toast(e.message || "Failed to delete subject.", "error");
+        }
+      },
+    });
+  };
+
+  const filteredSubjects = subjects.filter(s => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return [s.code, s.title, s.dept, s.schedule, s.room, s.instructor, s.desc, s.pre]
+      .filter(Boolean)
+      .some(v => String(v).toLowerCase().includes(q));
+  });
+
+  return (
+    <div>
+      <div className="neo fu" style={{padding:"18px 20px",marginBottom:16,borderLeft:"3px solid var(--acc)",display:"flex",justifyContent:"space-between",gap:16,flexWrap:"wrap",alignItems:"center"}}>
+        <div>
+          <div style={{fontFamily:"var(--ff)",fontSize:18,fontWeight:700}}>Subject Management</div>
+          <div style={{fontSize:12.5,color:"var(--muted)",marginTop:4}}>Create, edit, and remove subjects here. Students only see the subject catalog you publish.</div>
+        </div>
+        <div style={{fontSize:12,color:"var(--muted)"}}>{subjects.length} total subjects</div>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:14,marginBottom:18}}>
+        <div className="neo fu d2" style={{padding:"18px 20px"}}>
+          <div style={{fontSize:11.5,color:"var(--muted)",marginBottom:14,fontWeight:500,letterSpacing:"0.06em",textTransform:"uppercase",display:"flex",alignItems:"center",gap:8}}>
+            <BookMarked size={14}/> {editingCode ? "Edit Subject" : "New Subject"}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <label style={{display:"flex",flexDirection:"column",gap:6,fontSize:12,color:"var(--muted)"}}>
+              Code
+              <input className="neo-input" value={form.code} disabled={!!editingCode} onChange={e=>setForm(f=>({...f,code:e.target.value.toUpperCase()}))} placeholder="CS101" />
+            </label>
+            <label style={{display:"flex",flexDirection:"column",gap:6,fontSize:12,color:"var(--muted)"}}>
+              Units
+              <input className="neo-input" type="number" min="0" value={form.units} onChange={e=>setForm(f=>({...f,units:e.target.value}))} />
+            </label>
+            <label style={{display:"flex",flexDirection:"column",gap:6,fontSize:12,color:"var(--muted)"}}>
+              Title
+              <input className="neo-input" value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="Introduction to Computing" style={{gridColumn:"1 / -1"}} />
+            </label>
+            <label style={{display:"flex",flexDirection:"column",gap:6,fontSize:12,color:"var(--muted)"}}>
+              Year Level
+              <input className="neo-input" type="number" min="1" max="6" value={form.yr} onChange={e=>setForm(f=>({...f,yr:e.target.value}))} />
+            </label>
+            <label style={{display:"flex",flexDirection:"column",gap:6,fontSize:12,color:"var(--muted)"}}>
+              Department
+              <select className="neo-input" value={form.dept} onChange={e=>setForm(f=>({...f,dept:e.target.value}))}>
+                {DEPARTMENTS.map(d=><option key={d} value={d}>{d}</option>)}
+              </select>
+            </label>
+            <label style={{display:"flex",flexDirection:"column",gap:6,fontSize:12,color:"var(--muted)"}}>
+              Schedule
+              <input className="neo-input" value={form.schedule} onChange={e=>setForm(f=>({...f,schedule:e.target.value}))} placeholder="MWF 08:00-09:00" />
+            </label>
+            <label style={{display:"flex",flexDirection:"column",gap:6,fontSize:12,color:"var(--muted)"}}>
+              Room
+              <input className="neo-input" value={form.room} onChange={e=>setForm(f=>({...f,room:e.target.value}))} placeholder="Room 204" />
+            </label>
+            <label style={{display:"flex",flexDirection:"column",gap:6,fontSize:12,color:"var(--muted)"}}>
+              Instructor
+              <input className="neo-input" value={form.instructor_name} onChange={e=>setForm(f=>({...f,instructor_name:e.target.value}))} placeholder="Dr. Juan Cruz" />
+            </label>
+            <label style={{display:"flex",flexDirection:"column",gap:6,fontSize:12,color:"var(--muted)",gridColumn:"1 / -1"}}>
+              Description
+              <textarea className="neo-input" rows={4} value={form.desc} onChange={e=>setForm(f=>({...f,desc:e.target.value}))} placeholder="Subject overview, coverage, or notes" />
+            </label>
+            <label style={{display:"flex",flexDirection:"column",gap:6,fontSize:12,color:"var(--muted)",gridColumn:"1 / -1"}}>
+              Pre-requisite Code
+              <input className="neo-input" value={form.pre} onChange={e=>setForm(f=>({...f,pre:e.target.value.toUpperCase()}))} placeholder="Optional prereq code or leave blank" />
+            </label>
+          </div>
+          <div style={{display:"flex",gap:10,marginTop:14,flexWrap:"wrap"}}>
+            <button className="btn btn-pri btn-sm" onClick={saveSubject} disabled={saving}>
+              <Check size={12}/>{editingCode ? "Update Subject" : "Create Subject"}
+            </button>
+            <button className="btn btn-sm" onClick={resetForm} style={{background:"rgba(163,209,198,0.08)"}}>
+              <X size={12}/>Clear
+            </button>
+          </div>
+        </div>
+
+        <div className="neo fu d3" style={{padding:"18px 20px"}}>
+          <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",marginBottom:12,flexWrap:"wrap"}}>
+            <div style={{fontSize:11.5,color:"var(--muted)",fontWeight:500,letterSpacing:"0.06em",textTransform:"uppercase",display:"flex",alignItems:"center",gap:8}}><Search size={14}/> Subject Catalog</div>
+            <input className="neo-input" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search code, title, department..." style={{minWidth:240,flex:1}} />
+          </div>
+          {loading ? (
+            <div style={{display:"grid",gap:10}}>
+              <Skel h={48}/><Skel h={48}/><Skel h={48}/>
+            </div>
+          ) : filteredSubjects.length===0 ? (
+            <div style={{padding:24,textAlign:"center",color:"var(--muted)",fontSize:13}}>No subjects match your search.</div>
+          ) : (
+            <div style={{display:"grid",gap:10,maxHeight:620,overflowY:"auto",paddingRight:4}}>
+              {filteredSubjects.map(s=>(
+                <div key={s.code} className="neo-sm" style={{padding:"14px 14px 12px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"flex-start"}}>
+                    <div style={{minWidth:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                        <code style={{fontFamily:"var(--ff-mono)",fontSize:12,color:"var(--mint)",fontWeight:600}}>{s.code}</code>
+                        <span style={{fontSize:11,color:"var(--muted)",background:"rgba(163,209,198,0.08)",borderRadius:999,padding:"3px 8px"}}>Yr {s.yr}</span>
+                        <span style={{fontSize:11,color:"var(--muted)",background:"rgba(163,209,198,0.08)",borderRadius:999,padding:"3px 8px"}}>{s.dept}</span>
+                      </div>
+                      <div style={{fontSize:13.5,fontWeight:600,marginTop:6}}>{s.title}</div>
+                      <div style={{fontSize:12,color:"var(--muted)",marginTop:4,lineHeight:1.5}}>
+                        {s.schedule || "No schedule set"} · {s.room || "No room set"}
+                        <br/>{s.instructor || "No instructor assigned"}
+                      </div>
+                    </div>
+                    <div style={{display:"flex",gap:6,flexShrink:0}}>
+                      <button className="btn btn-icon btn-sm" onClick={()=>startEdit(s)} title="Edit subject">
+                        <Pencil size={12}/>
+                      </button>
+                      <button className="btn btn-icon btn-sm" style={{background:"rgba(192,57,43,0.1)",color:"#E74C3C"}} onClick={()=>deleteSubject(s)} title="Delete subject">
+                        <Trash2 size={12}/>
+                      </button>
+                    </div>
+                  </div>
+                  {s.desc && <div style={{fontSize:12.5,color:"var(--muted)",marginTop:10,lineHeight:1.6}}>{s.desc}</div>}
+                  <div style={{fontSize:11.5,color:"var(--dim)",marginTop:8}}>Pre-requisite: {s.pre || "None"} · {s.units} units</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 /* ────────────────── ENROLLMENT VIEW ────────────────── */
 const EnrollmentView = ({toast, role, user}) => {
   const isAdmin = role === "admin";
@@ -1400,7 +1645,7 @@ const EnrollmentView = ({toast, role, user}) => {
 
       <div style={{marginBottom:20}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-          <div style={{fontSize:13,fontWeight:500,color:"var(--muted)",letterSpacing:"0.05em",textTransform:"uppercase",display:"flex",alignItems:"center",gap:8}}><BookCheck size={14}/>Enrolled Subjects</div>
+          <div style={{fontSize:13,fontWeight:500,color:"var(--muted)",letterSpacing:"0.05em",textTransform:"uppercase",display:"flex",alignItems:"center",gap:8}}><BookCheck size={14}/>{isAdmin ? "Enrolled Subjects" : "Assigned Subjects"}</div>
           <div style={{fontSize:13,color:"var(--muted)"}}>Total: <span style={{color:"var(--mint)",fontWeight:600}}>{totalUnits} units</span></div>
         </div>
         {isAdmin&&!selectedStudentId?(
@@ -1408,11 +1653,11 @@ const EnrollmentView = ({toast, role, user}) => {
         ):loadingEnroll?(
           <div className="neo" style={{padding:20}}><Skel h={13} mb={8}/><Skel h={13}/></div>
         ):enrolledSubjects.length===0?(
-          <div className="neo" style={{padding:24,textAlign:"center",color:"var(--muted)",fontSize:13}}>No subjects enrolled yet. Add subjects below.</div>
+          <div className="neo" style={{padding:24,textAlign:"center",color:"var(--muted)",fontSize:13}}>{isAdmin ? "No subjects assigned yet." : "No subjects have been assigned to your account yet."}</div>
         ):(
           <div className="neo" style={{overflowX:"auto"}}>
             <table className="dt" style={{minWidth:600}}>
-              <thead><tr><th>Code</th><th>Subject Title</th><th>Dept</th><th>Yr</th><th>Units</th><th>Schedule</th><th>Instructor</th><th></th></tr></thead>
+              <thead><tr><th>Code</th><th>Subject Title</th><th>Dept</th><th>Yr</th><th>Units</th><th>Schedule</th><th>Instructor</th>{isAdmin ? <th></th> : null}</tr></thead>
               <tbody>
                 {enrolledSubjects.map(s=>(
                   <tr key={s.code}>
@@ -1423,7 +1668,7 @@ const EnrollmentView = ({toast, role, user}) => {
                     <td style={{fontFamily:"var(--ff-mono)",fontSize:12,textAlign:"center"}}>{s.units}</td>
                     <td style={{fontSize:12,color:"var(--muted)"}}>{s.schedule}</td>
                     <td style={{fontSize:12,color:"var(--muted)"}}>{s.instructor}</td>
-                    <td><button className="btn btn-icon btn-sm" style={{background:"rgba(192,57,43,0.1)",color:"#E74C3C"}} onClick={()=>drop(s)} title="Drop subject"><X size={11}/></button></td>
+                    {isAdmin && <td><button className="btn btn-icon btn-sm" style={{background:"rgba(192,57,43,0.1)",color:"#E74C3C"}} onClick={()=>drop(s)} title="Drop subject"><X size={11}/></button></td>}
                   </tr>
                 ))}
               </tbody>
@@ -1432,7 +1677,7 @@ const EnrollmentView = ({toast, role, user}) => {
         )}
       </div>
 
-      {(!isAdmin||(isAdmin&&selectedStudentId))&&(
+      {isAdmin&&selectedStudentId&&(
         <>
           <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap",alignItems:"center"}}>
             <div style={{fontSize:13,fontWeight:500,color:"var(--muted)",letterSpacing:"0.05em",textTransform:"uppercase",display:"flex",alignItems:"center",gap:8,marginRight:4}}><ClipboardList size={14}/>Add Subjects</div>
@@ -1484,7 +1729,6 @@ const EnrollmentView = ({toast, role, user}) => {
     </div>
   );
 };
-
 /* ────────────────── SOA VIEW ────────────────── */
 const SOAView = ({role, user}) => {
   const [soaData,setSoaData]=useState(null);
@@ -2024,6 +2268,7 @@ const NAV_CONFIG = {
     {id:"pending",   label:"Pending Accounts", icon:<UserCheck size={16}/>},
     {id:"students",  label:"Students",          icon:<Users size={16}/>},
     {id:"grades",    label:"Grade Encoding",    icon:<BookOpen size={16}/>},
+    {id:"subjects",  label:"Subjects",          icon:<BookMarked size={16}/>},
     {id:"enroll",    label:"Enrollment",        icon:<ClipboardList size={16}/>},
     {id:"soa",       label:"Statement of Acct", icon:<Receipt size={16}/>},
     {id:"announce",  label:"Announcements",     icon:<Bell size={16}/>},
@@ -2119,6 +2364,7 @@ const Dashboard = ({user, setUser, theme, setTheme, onLogout, showModal, toast})
     if(active==="pending")  return <PendingAccountsView toast={toast} role={user.role}/>;
     if(active==="students") return <StudentsView {...p} readOnly={user.role==="teacher"}/>;
     if(active==="grades")   return <GradesView {...p}/>;
+    if(active==="subjects") return <SubjectsAdminView toast={toast} showModal={showModal}/>;
     if(active==="enroll")   return <EnrollmentView toast={toast} role={user.role} user={user}/>;
     if(active==="soa")      return <SOAView role={user.role} user={user}/>;
     if(active==="announce") return <AnnouncementsView/>;
